@@ -1,0 +1,149 @@
+---
+title: "Reproducible Research - PA1"
+author: "Antonela Tomiæ"
+date: "Sunday, September 14, 2014"
+output: html_document
+---
+  
+    
+    
+**Loading and preprocessing the data**  
+1. Load the data (i.e. read.csv())  
+```{r}
+library("stringr")
+library("knitr")
+activity <- read.csv("activity.csv", header = TRUE, sep = ",", quote = "\"", dec = ".", fill = TRUE, comment.char = "")
+```
+  
+2. Process/transform the data (if necessary) into a format suitable for your analysis  
+```{r}
+maketimeformat <- function (x) {
+    y <- ""
+    if (nchar(x) == 1) {
+        y <- str_c("00:0",x, sep = "")
+        }
+    if (nchar(x) == 2) {
+        y <- str_c("00:",x, sep = "")
+        }
+    if (nchar(x) == 3) {
+        y <- str_c("0",substr(x,1,1), ":", substr(x,2,3), sep = "")
+        }
+    if (nchar(x) == 4) {
+        y <- str_c(substr(x,1,2), ":", substr(x,3,4), sep = "")
+        }
+    x <- y
+}
+```
+
+
+**What is mean total number of steps taken per day?**  
+*For this part of the assignment, you can ignore the missing values in the dataset.*  
+1. Make a histogram of the total number of steps taken each day  
+```{r fig.height=4}
+activitybydates <- aggregate(activity$steps, by=list(activity$date), FUN=sum, na.rm=TRUE)
+names(activitybydates) <- c("Date", "NumberOfSteps")
+hist(activitybydates$NumberOfSteps, labels = TRUE, ylim = c(0, 30))
+```  
+  
+2. Calculate and report the mean and median total number of steps taken per day
+```{r}
+meansteps <- mean(activitybydates$NumberOfSteps)
+msg1 <- cat("Mean number of steps per day is: ", meansteps)
+mediansteps <- median(activitybydates$NumberOfSteps)
+msg2 <- cat("Median number of steps per day is: ", mediansteps)
+```
+      
+      
+**What is the average daily activity pattern?**  
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)  
+```{r fig.height=4}
+activitybyintervals <- aggregate(activity$steps, by=list(activity$interval), FUN=mean, na.rm=TRUE)
+names(activitybyintervals) <- c("Interval", "NumberOfSteps")
+IntervalsLabels <- rep("00:00", 288)
+for (i in 1:nrow(activitybyintervals)) {
+    IntervalsLabels[i] <- maketimeformat(as.character(activitybyintervals$Interval[i]))
+} 
+plot(activitybyintervals$Interval, activitybyintervals$NumberOfSteps, type="s", xlab = "5 minute intervals in day", ylab = "Number of steps in 5 min interval", labels = FALSE)
+axis(side=2, labels=TRUE)
+axis(side=1, at=activitybyintervals$Interval[seq(1, length(activitybyintervals$Interval),12)], labels=IntervalsLabels[seq(1, length(IntervalsLabels),12)], las=2)
+grid(nx = NULL, ny = NULL, col = "lightgray", lty = "dotted")
+```
+
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+maxsteps <- activitybyintervals[activitybyintervals$NumberOfSteps==max(activitybyintervals$NumberOfSteps),]
+maxstepsstart <- maketimeformat(maxsteps$Interval)
+maxstepsend <- maketimeformat(maxsteps$Interval + 5)
+cat("Maximum number of steps on average is between", maxstepsstart, "and", maxstepsend)
+```
+  
+  
+**Imputing missing values**  
+*Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.*  
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)  
+```{r}
+summ <- summary(activity)
+cat("Number of missing values is\n",summ[7])
+```
+  
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.  
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.  
+```{r}
+activityfill <- activity
+activityfillna <- is.na(activityfill$steps)
+nna <- length(activityfill$steps[activityfillna])
+for (i in 1:nrow(activityfill)) {
+    if (is.na(activityfill$steps[i])) { 
+        activityfill$steps[i] <- activitybyintervals$NumberOfSteps[activitybyintervals$Interval==activityfill$interval[i]]        
+    }
+}
+```
+  
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r fig.height=4}
+activityfillbydates <- aggregate(activityfill$steps, by=list(activityfill$date), FUN=sum, na.rm=TRUE)
+names(activityfillbydates) <- c("Date", "NumberOfSteps")
+hist(activityfillbydates$NumberOfSteps, labels = TRUE, ylim = c(0, 40))
+meansteps <- mean(activityfillbydates$NumberOfSteps)
+msg1 <- cat("Mean number of steps per day is: ", meansteps)
+mediansteps <- median(activityfillbydates$NumberOfSteps)
+msg2 <- cat("Median number of steps per day is: ", mediansteps)
+```  
+    
+  
+**Are there differences in activity patterns between weekdays and weekends?**  
+*For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.*  
+  
+1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.  
+```{r}
+df = data.frame(date=activityfillbydates$Date) 
+df$day <- weekdays(as.Date(df$date))
+activityfillbydates$day <- df$day
+for (i in 1:length(activityfillbydates$day)) {
+    if (activityfillbydates$day[i]=="subota" || activityfillbydates$day[i]=="nedjelja"){ 
+        activityfillbydates$day[i] <- "week_end"
+        } 
+    else {
+            activityfillbydates$day[i] <- "week_day"
+        }
+}        
+```
+  
+2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+```{r fig.height=4}
+for (i in 1:nrow(activityfill)) {
+    activityfill$day[i] <- activityfillbydates$day[activityfillbydates$Date==activityfill$date[i] ]
+}
+activityfillbyintervals <- aggregate(activityfill$steps, by=list(activityfill$interval,activityfill$day), FUN=mean, na.rm=TRUE)
+names(activityfillbyintervals) <- c("Interval", "Day", "NumberOfSteps")
+week_days <- activityfillbyintervals[1:288,]
+week_ends <- activityfillbyintervals[289:576,]
+plot(week_days$Interval, week_days$NumberOfSteps, type="l", xlab = "5 minute intervals in day", ylab = "Number of steps in 5 min interval", main="Weekday-red Weekend-black", col = 'red', labels = FALSE)
+axis(side=2, labels=TRUE)
+axis(side=1, at=week_days$Interval[seq(1, length(week_days$Interval),12)], labels=IntervalsLabels[seq(1, length(IntervalsLabels),12)], las=2)
+grid(nx = NULL, ny = NULL, col = "lightgray", lty = "dotted")
+lines(week_ends$Interval, week_ends$NumberOfSteps, type="l", xlab = "5 minute intervals in day", ylab = "Number of steps in 5 min interval", labels = FALSE)
+# # axis(side=2, labels=TRUE)
+# axis(side=1, at=week_ends$Interval[seq(1, length(week_ends$Interval),12)], labels=IntervalsLabels[seq(1, length(IntervalsLabels),12)], las=2)
+# grid(nx = NULL, ny = NULL, col = "lightgray", lty = "dotted")
+```
